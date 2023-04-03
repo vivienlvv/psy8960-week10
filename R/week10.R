@@ -102,6 +102,14 @@ for(i in 1:length(mod_vec)){
   
 }
 
+## Note: Instructions on getting CV and holdout estimates 
+### I noted the requirement for getting cross-validated and holdout estimates in 
+### Step 7, but this will be redundant because I created a results function in 
+### the publication section to get the three required pieces of info at once
+
+
+
+
 # Publication
 
 ## Question Responses:
@@ -118,7 +126,9 @@ for(i in 1:length(mod_vec)){
 
 ### Compared to results from 10-fold cross-validation, the R-Squared values 
 ### for holdout validation set are substantially smaller. This is likely because
-### of potential overfitting during model training. 
+### of potential overfitting during model training, so model parameters were 
+### optimized against the training dataset. That's why performance is not as 
+### good in the unseen holdout set. 
 
 ### 3. Among the four models, which would you choose for a real-life prediction problem, and why? Are there tradeoffs? Write up to a paragraph.
 
@@ -133,7 +143,6 @@ for(i in 1:length(mod_vec)){
 ### I will choose random forest. 
 
 
-## Constructing required tibble
 
 ## Creating a results function to get required info from each model
 ### R2 was computed as squared correlation based on lecture demo
@@ -148,6 +157,8 @@ results = function(train_mod){
   return(c("algo" = algo, "cv_rsq" = cv_rsq, "ho_sq" = ho_rsq))
 }
 
+
+## Constructing required tibble
 table1_tbl = as_tibble(t(sapply(mod_ls, results)))
 
 
