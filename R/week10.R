@@ -123,13 +123,14 @@ for(i in 1:length(mod_vec)){
 ### 3. Among the four models, which would you choose for a real-life prediction problem, and why? Are there tradeoffs? Write up to a paragraph.
 
 ### Among the four models, I will choose random forest. Random forest and
-### XGBoost both had the greatest cross-validated R2 value which means 
+### XGBoost  had the greatest cross-validated R2 values which means 
 ### they were able to explain the greatest amount of variance in 
 ### work hours, our response variable. But random forest has the greatest 
 ### holdout sample validation R2 value which means that the model generalizes
-### to unseen "new" data the best and is able to make most accurate 
+### to unseen "new" data the best and is able to make 
 ### predictions based on new observations with least error compared to the 
-### other three algorithms. 
+### other three algorithms. Therefore, with prediction as the final goal,
+### I will choose random forest. 
 
 
 ## Constructing required tibble
@@ -154,7 +155,7 @@ table1_tbl = as_tibble(t(sapply(mod_ls, results)))
 # A tibble: 4 × 3
 # algo    cv_rsq ho_sq
 # <chr>   <chr>  <chr>
-#   1 lm      .69    .29  
-# 2 glmnet  .71    .32  
-# 3 ranger  .89    .54  
-# 4 xgbTree .92    .48  
+# 1 lm      .71    .29  
+# 2 glmnet  .75    .32  
+# 3 ranger  .91    .54  
+# 4 xgbTree .93    .48   
