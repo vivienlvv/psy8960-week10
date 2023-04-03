@@ -3,6 +3,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 require(haven)
 library(tidyverse)
 library(caret)
+
 ## Setting seed for reproducibility
 set.seed(2023)
 
@@ -13,9 +14,11 @@ set.seed(2023)
 ## Using a single pipe, I did the following: 
 ## 1) read in the .sav file,
 ## 2) mutated columns to be numeric to get rid of meta-data; 
-## 3) dropped NAs in the required column; 
-## 4) renamed variable to workhours; 
-## 5) selected only cols with less than 75% of missing data using  select_if()
+## 3) Confirmed all missing values/ non-applicable/ don't know, etc. were
+## imported as NAs
+## 4) dropped NAs in the required column HRS1; 
+## 5) renamed variable to workhours; 
+## 6) selected only cols with less than 75% of missing data using  select_if()
 ## because it allows selection of variables with logical vector as entry
 
 gss_tbl = read_sav("../data/GSS2016.sav") %>% 
@@ -24,6 +27,9 @@ gss_tbl = read_sav("../data/GSS2016.sav") %>%
   # Double check missing value cleaning
   rename(workhours = HRS1) %>% 
   select_if(sapply(., FUN = function(x) sum(is.na(x))/nrow(.) < 0.75))
+
+## Creating vector containing info for each method for Steps 7 & 8 
+mod_vec = c("lm", "glmnet", "ranger", "xgbTree")
 
 
 
@@ -56,99 +62,142 @@ reuseControl = trainControl( method = "cv", number = 10, search = "grid",
 
 
 ## Training models 
-### Notes: 
+
+### Comments to explain model training decisions: 
 ### 1. Grid search was not given a custom tuning grid because I had no reason
-### to think certain hyperparameter values would work better than others 
+### to think specific hyperparameter values would work better than others, so 
+### I decided to just use the default tune grid provided by caret
 ### 2. center, scale, nzv are only applied to linear models (OLS & glmnet) 
 ### because tree-based models can normally deal with standardization and 
 ### variance in variables 
+### 3. Models were optimized on R2 because assignment instructions seemed to 
+### suggest this
 
 
-### 1. OLS Regression (lm)
-mod_ols = train(workhours ~ ., 
-                data = gss_tbl_train,
-                method = "lm",
-                metric = "Rsquared",
-                na.action = na.pass,
-                trControl = reuseControl,
-                preProcess = c("center", "scale", "nzv", "medianImpute"))
+## Creating an empty list to store output models from for loop
+mod_ls = list()
 
-## 2. Elastic Net (glmnet)
-mod_enet = train(workhours ~ ., 
-                data = gss_tbl_train,
-                method = "glmnet",
-                metric = "Rsquared",
-                na.action = na.pass,
-                trControl = reuseControl,
-                preProcess = c("center", "scale", "nzv", "medianImpute"))
+for(i in 1:length(mod_vec)){
+  
+  method = mod_vec[i]
+  
+  # Getting pre-processing options based on method used
+  if(method == "lm" | method == "glmnet"){
+    pre_process = c("center", "scale", "nzv", "medianImpute")
+  }else{
+    pre_process = "medianImpute"
+  }
+  
+  # Training model 
+  mod = train(workhours ~ .,
+              data = gss_tbl_train,
+              method = method,
+              metric = "Rsquared",
+              na.action = na.pass,
+              trControl = reuseControl,
+              preProcess = pre_process)
+  
+  # Saving model from each iteration to the pre-defined list 
+  mod_ls[[i]] = mod
+  
+}
 
-## 3. random forest (rf)
-mod_rf = train(workhours ~ ., 
-               data = gss_tbl_train,
-               method = "ranger",
-               metric = "Rsquared",
-               na.action = na.pass,
-               trControl = reuseControl,
-               preProcess = "medianImpute")
+# Publication
 
-## 4. XGBoost (xgbTree)
-mod_xgb = train(workhours ~ ., 
-                data = gss_tbl_train,
-                method = "xgbTree",
-                metric = "Rsquared",
-                na.action = na.pass,
-                trControl = reuseControl,
-                preProcess = "medianImpute")
+## Question Responses:
+### 1. How did your results change between models? Why do you think this happened, specifically?
 
-
-
-# Publication- NEED TO ADD STUFF IN
-
-## Responses:
-
-### 1. Across the four algorithms, we can see that tree-based models (i.e.,
+### Across the four algorithms, we can see that tree-based models (i.e.,
 ### random forest and xgboost) yield better performance than linear models (i.e.,
 ### OLS and elastic net) as shown by the larger R squared values from both 
 ### 10-fold cross-validation and holdout validation. One potential explanation 
-### is that [ADD STUFF HERE]
+### is that there are potential higher order effects across variables that 
+### cannot be captured using linear models. 
 
-### 2. Compared to results from 10-fold cross-validation, the R-Squared value 
-### for holdout validation set is significantly smaller. This is likely because
-### of potential overfitting issues during model training 
+### 2. How did you results change between k-fold CV and holdout CV? Why do you think this happened, specifically?
 
-### 3. Among the four models, I will choose random forest. Random forest and
+### Compared to results from 10-fold cross-validation, the R-Squared values 
+### for holdout validation set are substantially smaller. This is likely because
+### of potential overfitting during model training. 
+
+### 3. Among the four models, which would you choose for a real-life prediction problem, and why? Are there tradeoffs? Write up to a paragraph.
+
+### Among the four models, I will choose random forest. Random forest and
 ### XGBoost both had the greatest cross-validated R2 value which means 
 ### they were able to explain the greatest amount of variance in 
-### work hours, our response variable. Also, random forest has the greatest 
+### work hours, our response variable. But random forest has the greatest 
 ### holdout sample validation R2 value which means that the model generalizes
-### to unseen "new" data the best and is able to make best predictions 
-### with least error compared to, say, xgboost. 
+### to unseen "new" data the best and is able to make most accurate 
+### predictions based on new observations with least error compared to the 
+### other three algorithms. 
 
+
+## Constructing required tibble
 
 ## Creating a results function to get required info from each model
 ### R2 was computed as squared correlation based on lecture demo
+### Input: caret train model; Output: vector of required info 
+### Note that this function can be passed directly to sapply() function below,
+### but for clarity, I decided to do them separately
 results = function(train_mod){
-  
   algo = train_mod$method
   cv_rsq = str_remove(format(round(max(train_mod$results$Rsquared), 2), nsmall = 2), "^\\d")
   preds = predict(train_mod, gss_tbl_test, na.action = na.pass)
   ho_rsq = str_remove(format(round(cor(preds, gss_tbl_test$workhours)^2, 2), nsmall = 2), "^\\d")
-  
-  return(c(algo, cv_rsq, ho_rsq))
+  return(c("algo" = algo, "cv_rsq" = cv_rsq, "ho_sq" = ho_rsq))
 }
 
-## Constructing required tibble
-table1_tbl = as_tibble(rbind(results(mod_ols), 
-                             results(mod_enet),
-                             results(mod_rf), 
-                             results(mod_xgb))) 
-colnames(table1_tbl) = list("algo", "cv_rsq", "ho_rsq")
+table1_tbl = as_tibble(t(sapply(mod_ls, results)))
 
 
-# 3/31- 18:47
-# algo    cv_rsq ho_rsq
-# <chr>   <chr>  <chr> 
-#   1 lm      .70    .29   
-# 2 glmnet  .73    .35   
-# 3 ranger  .93    .54   
-# 4 xgbTree .93    .46  
+# Output
+# A tibble: 4 × 3
+# algo    cv_rsq ho_sq
+# <chr>   <chr>  <chr>
+#   1 lm      .69    .29  
+# 2 glmnet  .71    .32  
+# 3 ranger  .89    .54  
+# 4 xgbTree .92    .48  
+
+
+
+
+# OLD CODE: Separate analyses for each model
+ ### 1. OLS Regression (lm)
+ mod_ols = train(workhours ~ .,
+                 data = gss_tbl_train,
+                 method = "lm",
+                 metric = "Rsquared",
+                 na.action = na.pass,
+                 trControl = reuseControl,
+                 preProcess = c("center", "scale", "nzv", "medianImpute"))
+
+ ## 2. Elastic Net (glmnet)
+ mod_enet = train(workhours ~ .,
+                  data = gss_tbl_train,
+                  method = "glmnet",
+                  metric = "Rsquared",
+                  na.action = na.pass,
+                  trControl = reuseControl,
+                  preProcess = c("center", "scale", "nzv", "medianImpute"))
+
+ ## 3. random forest (rf)
+ mod_rf = train(workhours ~ .,
+                data = gss_tbl_train,
+                method = "ranger",
+                metric = "Rsquared",
+                na.action = na.pass,
+                trControl = reuseControl,
+               preProcess = "medianImpute")
+
+ ## 4. XGBoost (xgbTree)
+ mod_xgb = train(workhours ~ .,
+                 data = gss_tbl_train,
+                 method = "xgbTree",
+                 metric = "Rsquared",
+                 na.action = na.pass,
+                 trControl = reuseControl,
+                 preProcess = "medianImpute")
+
+table1_tbl3 = as_tibble(t(sapply(list(mod_ols, mod_enet, mod_rf, mod_xgb), results)))
+colnames(table1_tbl3) = list("algo", "cv_rsq", "ho_rsq")
