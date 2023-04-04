@@ -54,6 +54,7 @@ gss_tbl_train = gss_tbl[index,]
 gss_tbl_test = gss_tbl[-index,]
 
 ## Creating 10 folds used in cross-validation from training set
+### Need to do it on y otherwise there might be fold overlap
 training_folds = createFolds(gss_tbl_train$workhours, 10)
 
 ## Creating reusable trainControl object for all 4 models 
@@ -106,6 +107,8 @@ for(i in 1:length(mod_vec)){
 ### I noted the requirement for getting cross-validated and holdout estimates in 
 ### Step 7, but this will be redundant because I created a results function in 
 ### the publication section to get the three required pieces of info at once
+### not enough pieces of information to solve; the matrix is rank-deficient 
+
 
 
 
@@ -170,3 +173,20 @@ table1_tbl = as_tibble(t(sapply(mod_ls, results)))
 # 2 glmnet  .75    .32  
 # 3 ranger  .91    .54  
 # 4 xgbTree .93    .48   
+
+
+
+
+# Class demo notes:
+## if criterion is not numeric, then we may run into issues using train() in caret
+## tuneLength also applies to glmnet 
+
+## Alternative ways to create training & split data:
+### train_cases = sample(1:nrow(gss_tbl), 0.75*nrow(gss_tbl))
+
+## Decoding warnings:
+### n:k ratio too low, we will have negative degrees of freedom 
+### We will see NaNs and the estimates will look super large or small
+
+## dotplot(resamples(list(mods)))
+### will show that for a model with no biased estimates 
